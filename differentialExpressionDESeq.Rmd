@@ -1,0 +1,104 @@
+---
+title: "Differential expression with DESeq"
+author: "Oscar Montoya"
+date: "February 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Code by Matt Workentine
+
+## Setting the environment
+```{r}
+
+
+#source("https://bioconductor.org/biocLite.R")
+
+library("tximport"); library("DESeq2"); library("Biostrings"); library("tidyverse"); library("stringr"); library(pheatmap)
+```
+
+
+```{r}
+setwd("...")
+
+list.files()
+```
+
+```{r}
+?tximport
+
+# Calling kallisto's results. 
+files <- list.files("kallistoResults", full.names = TRUE); print(files)
+
+samples <- basename(files) # Removes full path and keeps only the sample name (in base r)
+
+files <- file.path(files, "abundance.h5") # abundace.h5 is kallisto's output. If an error during DESeq, repace .h5 extension by .tsv
+
+names(files) <- samples # tximport needs this names to propely work
+
+
+tx <- tximport(files, "kallisto", txOut = TRUE)
+
+str(tx)
+
+
+# csv/txt metadata
+sample_data <- read_tsv("/path/to/metadata.csv")
+#View(sample_data)
+
+sample_data$group <- factor(paste0("G", sample_data$group))
+head(sample_data)
+str(sample_data)
+
+rownames(sample_data) <- sample_data$rep_id
+
+```
+
+
+# Differenctial expression will be done in DESeq
+```{r}
+dds <- DESeqDataSetFromTximport(tx, sample_data, ~ group ) # keep adding factors as in a multifactorial model
+
+dds <- DESeq(dds) # gene counst over disperse. Depending on expression levels itl have different vaues. DESq corrects for this.
+
+res <- results(dds, tidy = TRUE)
+
+# Get p values less than 0.01.
+res <- filter(res, padj < 0.01)
+
+```
+
+
+# PCA for quality control
+```{r}
+
+ddr <- rlog(dds) # approximate log2 transform of the count data
+plotPCA(ddr, intgroup = "group") +
+  stat_ellipse() +
+  ggtitle("Title")
+
+```
+
+
+# heatmap
+```{r}
+library(pheatmap)
+gene_counts = assay(ddr)[res$row,] # extract gene counts for DE genes
+gene_counts = scale(gene_counts)  # scale so all gene are in the same range
+gene_counts
+
+pheatmap(gene_counts, show_rownames = FALSE, show_colnames = TRUE) #+
+  geom_text(aes(row.names(gene_counts)))
+
+```
+
+
+```{r}
+sessionInfo()
+
+```
+
