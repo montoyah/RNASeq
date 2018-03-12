@@ -1,0 +1,72 @@
+---
+title: "Networ plots using network package"
+author: "Oscar Montoya"
+date: "March 28, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Import expresion results as a csv
+```{r}
+raw_data <- read.csv("/pat/to/file.csv", header = TRUE,
+                 stringsAsFactors = TRUE, 
+                 check.names = FALSE,  strip.white = TRUE, sep = ",",
+                 na.strings = c("", " ", "NA", "<NA>"),
+                 colClasses = NA)
+
+str(raw_data)
+head(raw_data)
+colnames(raw_data)
+
+```
+
+
+
+Will separate increased and decreased genes into different datasets to make independent plots. This will reduce the visual density when making the network plots. Once that data is separated, add "fold_increase"" or "_decrese"" column to the respective datasets.
+
+Increased expresion in two-fold:
+
+```{r}
+library(dplyr)
+
+empty <- NULL
+
+for(i in length(raw_data$`Exp Log Ratio`))
+{
+  empty[i] <- if(raw_data$`Exp Log Ratio`[i] < 0) 0.5 ^ test$`Exp Log Ratio`[i]  
+  else(0.5 ^ test$`Exp Log Ratio`)
+
+}
+
+hist(raw_data$`Exp Log Ratio`)
+
+# To sort data descending
+fold_change_data[order(fold_change_data$fold, decreasing = TRUE), ]
+```
+
+
+## Network plots
+
+### Increased folds
+
+```{r}
+
+library(network)
+network_data <- as.network.matrix(raw_data[raw_data$Location == "Nucleus", ], 
+                                  na.rm = TRUE)
+  
+network_plot <- plot.network(network_data)
+
+str(network_data)
+
+plot.network(increased_network_data, # our network object
+             # color nodes by gender
+             #vertex.cex = (age)/5, # size nodes by their age
+             displaylabels = T, # show the node names
+             label.pos = 5) # display the names directly over nodes
+```
+
