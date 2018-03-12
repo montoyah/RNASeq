@@ -1,0 +1,11 @@
+#Build index
+# Build an index using ffn output from prokka. -i (index) names the idex (as you want).
+
+kallisto index -i ~/path/to/write/index.idx ~/path/to/prokka_annotation/file.ffn
+
+
+# Once the index is built, run (requires parallel, adjust accordingly):
+
+# n = number of samples
+seq n | xargs printf "%02d\n" | parallel 'kallisto quant -i ~/path/to/index.idx -b 50 -o ~/path/to/write/Results/sample_{} ~/path/to/forwardRNASeqfasta/sample_{}_1.fasta ~/path/to/reverseRNASeqfasta/sample_{}_2.fasta'
+
