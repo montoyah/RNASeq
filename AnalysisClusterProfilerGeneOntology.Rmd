@@ -1,0 +1,375 @@
+---
+title: "RNA Seq analysis using clusterProfiler with gene ontology (GO)"
+author: "Oscar Montoya"
+date: "March 29, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Libraries
+```{r}
+
+library(DOSE)
+library(GO.db)
+library(org.Hs.eg.db) # Annotation package
+#source("https://bioconductor.org/biocLite.R")
+#biocLite("topGO") 
+library(topGO)
+#biocLite("GSEABase")
+library(GSEABase)
+library(clusterProfiler)
+#browseVignettes(package = "clusterProfiler")
+```
+
+
+An annotation package is required. I'll use "org.Hs.eg.db", specific for H. sapiens (taken from clusterProfiler vignette)
+```{r}
+#biocLite("org.Hs.eg.db")
+library(org.Hs.eg.db)
+browseVignettes(package = "org.Hs.eg.db")
+?org.Hs.eg.db
+
+keytypes(org.Hs.eg.db)
+
+#http://bioconductor.org/packages/release/BiocViews.html#___OrgDb
+
+```
+
+
+Import expression results as a csv.
+```{r}
+pcks <- read.csv("/path/to/file.csv", header = TRUE, stringsAsFactors = FALSE)
+str(pcks)
+head(pcks)
+
+#No duplicates gene symbols in pcks data set (three ways to test)
+pcks$Symbol[duplicated(pcks$Symbol, incomparables = FALSE)]
+
+which(pcks$Symbo[duplicated(pcks$Symbol, incomparables = FALSE)] == TRUE) 
+
+pcks$Symbol[anyDuplicated(pcks$Symbol, incomparables = FALSE)]
+```
+
+
+If needed find ENTREZID for further data analyses and plots:
+
+```{r}
+
+get.ENTREZID = bitr(pcks$SYMBOL, fromType="SYMBOL", toType="ENTREZID", OrgDb="org.Hs.eg.db")
+
+head(get.ENTREZID)
+str(get.ENTREZID)
+
+# Not all symbols are mapped. Find which symbols were not mapped:
+
+
+setdiff(pcks$SYMBOL, get.ENTREZID$SYMBOL) #These are the symbols that weren't mapped
+
+
+# Now I need to use merge() to fuse the two datasets while excluding the not mapped symbols.
+
+pcks_1 <- merge(pcks, get.ENTREZID, by =
+                  intersect(pcks$SYMBOL,
+                            get.ENTREZID$SYMBOL), 
+                by.x = "SYMBOL", 
+                by.y = "SYMBOL")
+
+head(pcks_1)
+
+```
+
+## Using Gene Ontology (GO)
+
+### GO Classification
+
+groupGO is designed for gene classification based on GO distribution at a specific level. Only expressions greater than 2 and lower than -2 will be analyzed ("expressions") and full dataset will be used for background genes -universe, in clusterProfiler ("all_genes") 
+
+
+```{r}
+
+# Take a look at the strcture used in clusterProfiler tutorial, called geneList from DOSE package
+
+data(geneList, package="DOSE")
+length(geneList) # 12495 genes in total
+
+gene <- names(geneList)[abs(geneList) > 2]
+
+length(gene) # 207 genes
+
+
+?groupGO
+
+
+# All names will be used in argument "universe"
+all_genes <- pcks$Exp.Log.Ratio
+
+names(all_genes) <-
+  as.numeric(pcks$Entrez.Gene.ID.for.Human)
+
+
+# "expressions_vector" vector will be used in argument "gene"
+expressions <- all_genes[abs(all_genes) > 2] # 103 genes wih absolute expresions > 2
+
+names(expressions)
+length(expressions) 
+
+# Test with geneList
+test_geneList <- groupGO(gene = names(geneList)[abs(geneList) > 2],
+               OrgDb    = org.Hs.eg.db,
+               ont      = "CC",
+               level    = 3,
+               readable = TRUE)
+
+head(test_geneList) 
+
+
+# Actual analysis with my data
+
+ggo_BP <- groupGO(gene = names(expressions),
+               OrgDb    = org.Hs.eg.db,
+               ont      = c("BP"), #Biological Process (BP), Cellular Component (CC) or molecular Function (MF) subontologies
+               level    = 3,
+               readable = TRUE)
+
+head(ggo_BP); View(ggo_BP)
+
+################
+
+ggo_CC <- groupGO(gene = names(expressions),
+               OrgDb = org.Hs.eg.db,
+               ont = c("CC"), 
+               level = 3,
+               readable = TRUE)
+
+head(ggo_CC); View(ggo_CC)
+
+################
+
+ggo_MF <- groupGO(gene = expressions,
+               OrgDb = org.Hs.eg.db,
+               ont = c("MF"), 
+               level  = 3,
+               readable = TRUE)
+
+head(ggo_MF ); View(ggo_MF )
+
+#################
+
+head(ggo_BP); head(ggo_CC); head(ggo_MF)
+
+```
+
+
+## GO over-representation test
+
+
+```{r}
+?enrichGO
+
+# Overrepresentation using biological processes (BP) ontology from Gene Ontology
+
+keytypes(org.Hs.eg.db)
+
+
+# ==============================
+
+OverRep_GO <- enrichGO(gene = names(expressions),
+                       universe = names(all_genes), 
+                       OrgDb = org.Hs.eg.db,
+                       #keytype = "ENTREZID",
+                       ont = "BP",
+                       pAdjustMethod = "BH",
+                       pvalueCutoff = 0.5,
+                       qvalueCutoff = 0.2 # falsexpressionse discovery rate (FDR) estimation from a collection of p-values or from a collection of test-statistics with corresponding empirical null statistics. From "qvalue" package.
+                       #readable = TRUE
+                       )
+head(OverRep_GO)
+
+# Test with geneList, as done in the tutorial
+
+ego <- enrichGO(gene          = gene,
+                universe      = names(geneList),
+                OrgDb         = org.Hs.eg.db,
+                ont           = "CC",
+                pAdjustMethod = "BH",
+                pvalueCutoff  = 0.01,
+                qvalueCutoff  = 0.2,
+                readable      = TRUE)
+head(ego)
+
+```
+
+
+## GO Gene Set Enrichment Analysis (GSEA)
+
+Not working yet. Not clear what to put as geneList
+
+```{r}
+
+?gseGO
+
+#gswGO needs data sorted decreaing based on expresion levels
+
+
+
+GSEA_GO <- gseGO(geneList = all_genes,
+                       keytype = "ENTREZID",
+                       OrgDb = org.Hs.eg.db,
+                       ont = "CC",
+                       nPerm = 1000,
+                       #minGSSize = 10,
+                       #maxGSSize = 500,
+                       pvalueCutoff = 0.05, 
+                 #by = "fgsea",
+                       verbose = FALSE)
+
+?gseGO
+head(GSEA_GO)
+
+
+```
+
+## GO semantics similarity analysis
+Useful to compare two sets of genes.
+
+GO semantic similarity can be calculated by GOSemSim1. We can use it to cluster genes/proteins into different clusters based on their functional similarity and can also use it to measure the similarities among GO terms to reduce the redundancy of GO enrichment results.
+
+http://bioconductor.org/packages/release/bioc/vignettes/GOSemSim/inst/doc/GOSemSim.html
+```{r}
+#source("https://bioconductor.org/biocLite.R")
+#biocLite("AnnotationHub")
+library(AnnotationHub)
+hub <- AnnotationHub()
+
+q <- query(hub, "Homo sapiens")
+id <- q$ah_id[length(q)]
+Hsapiens <- hub[[id]]
+
+```
+
+build annotation data needed
+```{r}
+library(GOSemSim)
+HsapiensGO <- godata('org.Hs.eg.db', ont = "MF")
+```
+
+goSim and mgoSim... These two seem more two compare sets of genes instead of just looking at expression...?
+
+
+# Using MSigDB gene set collections
+
+```{r}
+# From tutorial
+#gmtfile <- system.file("extdata", "c5.cc.v5.0.entrez.gmt", package="clusterProfiler")
+
+# Download from broad institute and read
+c5 <- read.gmt("/path/to/genesets.gmt")
+
+head(c5)
+c5$gene
+
+
+egmt <- enricher(names(expressions_symbol),
+                 pvalueCutoff = 0.5,
+                 pAdjustMethod = "BH",
+                 #universe = names(all_genes_symbol),
+                 minGSSize = 1, 
+                 maxGSSize = 1000, 
+                 qvalueCutoff = 0.5,
+                 TERM2GENE=c5)
+
+head(egmt)
+
+################
+
+egmt2 <- GSEA(all_genes_symbol,
+              nPerm = 10000,
+              pvalueCutoff = 0.9,
+              pAdjustMethod = "BH",
+              TERM2GENE=c5,
+              #seed = 1,
+              verbose=FALSE)
+
+head(egmt2)
+dim(egmt2)
+
+enrichMap(egmt, 
+          #n=15, 
+          vertex.label.font = 0.1)
+
+str(egmt)
+head(egmt)
+class(egmt)
+reshape::melt(egmt) 
+```
+
+
+
+# Visualization
+
+```{r}
+?enrichMap
+?cnetplot
+
+str(OverRep_GO)
+
+enrichMap(OverRep_GO)
+
+# A less dense enrichMap plot by simpliying OverRep_GO. enrichMap uses netplot to buil the graph (from DOSE), which in turn uses iGraph.
+simplified_OverRep_GO <- simplify(OverRep_GO, cutoff=0.9, by="p.adjust", select_fun=min)
+enrichMap(simplified_OverRep_GO, vertex.label.font = 0.5)
+
+
+
+# Facet_wrap the plot for easier visualization by directly using iGraph
+library(igraph)
+layouts <- grep("^layout_", ls("package:igraph"), value=TRUE)[-1] 
+
+par(mfrow=c(3,3), mar=c(1,1,1,1))
+
+for (layout in layouts) {
+
+  print(layout)
+
+  l <- do.call(layout, list(OverRep_GO)) 
+
+  plot(OverRep_GO, edge.arrow.mode=0, layout=l, main=layout) }
+
+```
+
+## cnetplot of increase and decreased
+```{r}
+par(mfrow=c(1,1))
+
+cnetplot_increased <- cnetplot(OverRep_GO, #categorySize="pvalue",
+                               categorySize="geneNum",
+                               foldChange=pcks_1$Exp.Log.Ratio[pcks_1$Exp.Log.Ratio>=2])
+
+cnetplot_decreased <- cnetplot(OverRep_GO, categorySize="pvalue", foldChange=pcks_1$Exp.Log.Ratio[pcks_1$Exp.Log.Ratio<=-2])
+
+
+plotGOgraph(OverRep_GO)
+
+gseaplot(kk2, geneSetID = "hsa04145")
+
+browseKEGG(kk, 'hsa04110')
+
+library("pathview")
+hsa04110 <- pathview(gene.data  = geneList,
+                     pathway.id = "hsa04110",
+                     species    = "hsa",
+                     limit      = list(gene=max(abs(geneList)), cpd=1))
+
+barplot(OverRep_GO, drop=TRUE, showCategory=12)
+
+dotplot(OverRep_GO)
+
+gseaplot?
+```
+
+
+
